@@ -1,0 +1,64 @@
+name: Auto Sync & Publish
+
+on:
+  schedule:
+    # 每天 UTC 02:00 = 北京时间 10:00 检查上游更新
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: auto-sync-publish
+  cancel-in-progress: false
+
+jobs:
+  sync-and-publish:
+    name: Sync upstream and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/fish2018/webhtv.git
+          git fetch upstream main
+
+      - name: Check for upstream updates
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=$BEHIND"
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream changes
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --ff-only upstream/main || git merge upstream/main --no-edit
+          git push origin main
+
+      - name: Trigger Android Release build
+        if: steps.check.outputs.has_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run android-release.yml --ref main
+          echo "Android Release workflow triggered"
+
+      - name: No upstream update
+        if: steps.check.outputs.has_update == 'false'
+        run: echo "Upstream has no new commits, skip publish."

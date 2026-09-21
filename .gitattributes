@@ -1,0 +1,5 @@
+# fork 定制：与上游同步时，以下文件保留本仓库版本（merge=ours），避免冲突
+# 需在 workflow 中执行 `git config merge.ours.driver true` 才会生效
+app/src/main/java/com/fongmi/android/tv/utils/Github.java merge=ours
+.github/workflows/cnb-release-sync.yml merge=ours
+.github/scripts/sync-cnb-release.sh merge=ours

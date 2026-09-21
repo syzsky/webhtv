@@ -28,6 +28,12 @@ jobs:
           # 使用 SYNC_PAT 才能推送含 .github/workflows 的上游提交（GITHUB_TOKEN 无 workflows 权限）
           token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
 
+      - name: Configure merge strategy
+        run: |
+          # .gitattributes 中标记为 merge=ours 的文件（Github.java、CNB 占位文件）
+          # 合并上游时保留 fork 版本，避免冲突
+          git config merge.ours.driver true
+
       - name: Fetch upstream
         run: |
           git remote add upstream https://github.com/fish2018/webhtv.git 2>/dev/null || git remote set-url upstream https://github.com/fish2018/webhtv.git
@@ -50,13 +56,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git merge upstream/main --no-edit; then
-            git push origin main
-          else
+          if ! git merge upstream/main --no-edit; then
             git merge --abort
             echo "::error title=Merge conflict::上游改动与 fork 本地修改冲突，请人工处理后再同步"
             exit 1
           fi
+
+      - name: Strip CNB residue
+        if: success() && steps.check.outputs.has_update == 'true'
+        run: python3 .github/scripts/strip_cnb.py
+
+      - name: Push synced main
+        if: success() && steps.check.outputs.has_update == 'true'
+        run: git push origin main
 
       - name: Trigger Android Release build
         if: success() && steps.check.outputs.has_update == 'true'

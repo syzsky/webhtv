@@ -53,7 +53,7 @@ import java.util.concurrent.TimeoutException;
 public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(25);
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(9);
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
@@ -166,22 +166,16 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getGithubStableUpdate(String channel) {
-        Update update;
+        Update update = readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), GITHUB_ASSET_HEADERS, "");
+        if (update.hasManifest()) return update;
         try {
             JSONObject release = new JSONObject(fetchText(Github.getLatestReleaseApi(), GITHUB_API_HEADERS));
-            update = readGithubReleaseUpdate(channel, release);
-            if (update.hasManifest()) return update;
+            Update viaApi = readGithubReleaseUpdate(channel, release);
+            if (viaApi.hasManifest()) return viaApi;
+            if (!TextUtils.isEmpty(viaApi.error)) update.error = viaApi.error;
         } catch (Exception e) {
             e.printStackTrace();
-            update = Update.empty(channel);
-            update.error = e.getMessage();
-        }
-        try {
-            Update fallback = readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), GITHUB_ASSET_HEADERS, "");
-            if (fallback.hasManifest()) return fallback;
-            if (!TextUtils.isEmpty(fallback.error)) update.error = fallback.error;
-        } catch (Exception e) {
-            e.printStackTrace();
+            if (TextUtils.isEmpty(update.error)) update.error = e.getMessage();
         }
         return update;
     }
@@ -332,16 +326,25 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private String fetchText(String url, Map<String, String> headers) throws Exception {
+        GithubProxy.Config proxy = resolveProxy();
+        if (GithubProxy.DIRECT.equals(proxy.id)) return UpdateHttp.string(url, headers, GITHUB_REQUEST_TIMEOUT_MS);
         try {
-            return UpdateHttp.string(url, headers, GITHUB_REQUEST_TIMEOUT_MS);
-        } catch (Exception direct) {
-            GithubProxy.Config proxy = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
-            if (GithubProxy.DIRECT.equals(proxy.id)) throw direct;
+            return UpdateHttp.string(proxy.rewrite(url), headers, GITHUB_REQUEST_TIMEOUT_MS);
+        } catch (Exception viaProxy) {
             try {
-                return UpdateHttp.string(proxy.rewrite(url), headers, GITHUB_REQUEST_TIMEOUT_MS);
-            } catch (Exception viaProxy) {
-                throw new IllegalStateException(direct.getMessage() + " / proxy: " + viaProxy.getMessage());
+                return UpdateHttp.string(url, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            } catch (Exception direct) {
+                throw new IllegalStateException(viaProxy.getMessage() + " / direct: " + direct.getMessage());
             }
+        }
+    }
+
+    private GithubProxy.Config resolveProxy() {
+        try {
+            GithubProxy.Config proxy = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
+            return proxy == null ? GithubProxy.resolve(GithubProxy.DIRECT, "", GithubProxy.MODE_FULL_URL) : proxy;
+        } catch (Exception e) {
+            return GithubProxy.resolve(GithubProxy.DIRECT, "", GithubProxy.MODE_FULL_URL);
         }
     }
 

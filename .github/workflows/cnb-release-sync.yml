@@ -1,0 +1,16 @@
+name: CNB Release Sync (disabled)
+
+# fork 说明：syzsky/webhtv 不使用 CNB，发布链路只走 GitHub Releases。
+# 本文件仅作占位保留，配合 .gitattributes 的 merge=ours，避免与上游同步时产生
+# modify/delete 冲突。请勿在此处恢复任何 CNB 上传逻辑。
+on:
+  workflow_dispatch:
+
+jobs:
+  disabled:
+    name: CNB sync disabled
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notice
+        run: |
+          echo "CNB sync is disabled in this fork. Releases are published to GitHub Releases only."

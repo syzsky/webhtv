@@ -53,8 +53,8 @@ import java.util.concurrent.TimeoutException;
 public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
-    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(25);
+    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(9);
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
     private static final Updater INSTANCE = new Updater();
@@ -166,19 +166,30 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getGithubStableUpdate(String channel) {
+        Update update;
         try {
-            JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            return readGithubReleaseUpdate(channel, release);
+            JSONObject release = new JSONObject(fetchText(Github.getLatestReleaseApi(), GITHUB_API_HEADERS));
+            update = readGithubReleaseUpdate(channel, release);
+            if (update.hasManifest()) return update;
         } catch (Exception e) {
             e.printStackTrace();
-            return Update.empty(channel);
+            update = Update.empty(channel);
+            update.error = e.getMessage();
         }
+        try {
+            Update fallback = readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), GITHUB_ASSET_HEADERS, "");
+            if (fallback.hasManifest()) return fallback;
+            if (!TextUtils.isEmpty(fallback.error)) update.error = fallback.error;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return update;
     }
 
     private Update getGithubBetaUpdate(String channel) {
         String manifestName = getManifestName(channel);
         try {
-            JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            JSONArray releases = new JSONArray(fetchText(Github.getReleasesApi(), GITHUB_API_HEADERS));
             for (int i = 0; i < releases.length(); i++) {
                 JSONObject release = releases.optJSONObject(i);
                 if (release == null || !isBetaRelease(release)) continue;
@@ -187,6 +198,9 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             }
         } catch (Exception e) {
             e.printStackTrace();
+            Update update = Update.empty(channel);
+            update.error = e.getMessage();
+            return update;
         }
         return Update.empty(channel);
     }
@@ -216,7 +230,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private Update readUpdate(String channel, String manifestUrl, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            String text = UpdateHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            String text = fetchText(manifestUrl, headers);
             if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
             JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
@@ -311,9 +325,23 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private String readReleaseNotes(String tag) {
         try {
-            return new JSONObject(UpdateHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
+            return new JSONObject(fetchText(Github.getReleaseApi(tag), GITHUB_API_HEADERS)).optString("body");
         } catch (Exception ignored) {
             return "";
+        }
+    }
+
+    private String fetchText(String url, Map<String, String> headers) throws Exception {
+        try {
+            return UpdateHttp.string(url, headers, GITHUB_REQUEST_TIMEOUT_MS);
+        } catch (Exception direct) {
+            GithubProxy.Config proxy = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
+            if (GithubProxy.DIRECT.equals(proxy.id)) throw direct;
+            try {
+                return UpdateHttp.string(proxy.rewrite(url), headers, GITHUB_REQUEST_TIMEOUT_MS);
+            } catch (Exception viaProxy) {
+                throw new IllegalStateException(direct.getMessage() + " / proxy: " + viaProxy.getMessage());
+            }
         }
     }
 

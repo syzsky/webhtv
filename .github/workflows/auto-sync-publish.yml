@@ -2,8 +2,8 @@ name: Auto Sync & Publish
 
 on:
   schedule:
-    # 每3天 UTC 02:00 = 北京时间 10:00 检查上游更新
-    - cron: '0 2 */3 * *'
+    # 每天 UTC 02:00 = 北京时间 10:00 检查上游更新
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:

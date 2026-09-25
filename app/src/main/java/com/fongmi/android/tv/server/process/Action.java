@@ -382,7 +382,7 @@ public class Action implements Process {
             try {
                 MpvConfigSync.restoreArchive(archive);
             } catch (Exception e) {
-                throw new IllegalStateException(e);
+                SpiderDebug.log("sync", e);
             } finally {
                 Path.clear(archive);
             }
@@ -392,7 +392,7 @@ public class Action implements Process {
             try {
                 LoginStateSync.restoreArchive(archive);
             } catch (Exception e) {
-                throw new IllegalStateException(e);
+                SpiderDebug.log("sync", e);
             } finally {
                 Path.clear(archive);
             }

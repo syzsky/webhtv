@@ -103,7 +103,8 @@ public class Nano extends NanoHTTPD {
             String ct = session.getHeaders().get("content-type");
             if (ct != null) session.getHeaders().put("content-type", ct.replace("multipart/form-data", "multipart/form-data; charset=utf-8"));
             session.parseBody(files);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            SpiderDebug.log("server", e);
         }
     }
 

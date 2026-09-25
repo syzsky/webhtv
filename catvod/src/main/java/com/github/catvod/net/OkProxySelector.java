@@ -63,9 +63,13 @@ public class OkProxySelector extends ProxySelector {
     @Override
     public List<java.net.Proxy> select(URI uri) {
         String host = uri.getHost();
+        // 本机/局域网目标必须直连：既不套用代理规则，也不回退系统代理，避免内网设备同步、投屏请求被代理拦截
+        if (isLocalTarget(host)) {
+            logFallback(uri, "local-target", 0);
+            return List.of(java.net.Proxy.NO_PROXY);
+        }
         if (proxy.isEmpty()) return fallback(uri, "no-rule");
         if (host == null) return fallback(uri, "no-host");
-        if ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host)) return fallback(uri, "local-target");
         for (Proxy item : proxy) {
             for (String rule : item.getHosts()) {
                 if (!matches(host, rule)) continue;
@@ -81,6 +85,41 @@ public class OkProxySelector extends ProxySelector {
         List<java.net.Proxy> selected = fallback(uri);
         logFallback(uri, reason, selected.size());
         return selected;
+    }
+
+    private boolean isLocalTarget(String host) {
+        if (host == null || host.isEmpty()) return false;
+        String lower = host.toLowerCase(java.util.Locale.ROOT);
+        if (lower.indexOf('.') < 0) return true;
+        if (lower.endsWith(".local") || lower.endsWith(".localhost")) return true;
+        return isPrivateIpv4(lower) || isPrivateIpv6(lower);
+    }
+
+    private boolean isPrivateIpv4(String host) {
+        String[] parts = host.split("\\.", -1);
+        if (parts.length != 4) return false;
+        int[] value = new int[4];
+        for (int i = 0; i < 4; i++) {
+            String part = parts[i];
+            if (part.isEmpty() || part.length() > 3) return false;
+            for (int j = 0; j < part.length(); j++) if (!Character.isDigit(part.charAt(j))) return false;
+            value[i] = Integer.parseInt(part);
+            if (value[i] > 255) return false;
+        }
+        if (value[0] == 10 || value[0] == 127) return true;
+        if (value[0] == 192 && value[1] == 168) return true;
+        if (value[0] == 169 && value[1] == 254) return true;
+        if (value[0] == 172 && value[1] >= 16 && value[1] <= 31) return true;
+        return value[0] == 100 && value[1] >= 64 && value[1] <= 127;
+    }
+
+    private boolean isPrivateIpv6(String host) {
+        if (host.indexOf(':') < 0) return false;
+        String value = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        if ("::1".equals(lower)) return true;
+        if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+        return lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb");
     }
 
     private boolean matches(String host, String rule) {

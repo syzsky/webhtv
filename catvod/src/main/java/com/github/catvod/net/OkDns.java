@@ -57,9 +57,24 @@ public class OkDns implements Dns {
     @NonNull
     @Override
     public List<InetAddress> lookup(@NonNull String hostname) throws UnknownHostException {
+        // IP 字面量（含内网设备地址，如 192.168.x.x）直接交给系统解析，不经 DoH、也不套用 hosts 改写，避免内网直连被解析失败或改写
+        if (isIpLiteral(hostname)) return Dns.SYSTEM.lookup(hostname);
         Supplier<Doh> supplier = this.supplier;
         if (supplier != null) initDoh(supplier);
         return (doh != null ? doh : Dns.SYSTEM).lookup(get(hostname));
+    }
+
+    private static boolean isIpLiteral(String hostname) {
+        if (hostname == null || hostname.isEmpty()) return false;
+        if (hostname.indexOf(':') >= 0) return true;
+        String[] parts = hostname.split("\\.", -1);
+        if (parts.length != 4) return false;
+        for (String part : parts) {
+            if (part.isEmpty() || part.length() > 3) return false;
+            for (int i = 0; i < part.length(); i++) if (!Character.isDigit(part.charAt(i))) return false;
+            if (Integer.parseInt(part) > 255) return false;
+        }
+        return true;
     }
 
     private synchronized void initDoh(Supplier<Doh> supplier) {

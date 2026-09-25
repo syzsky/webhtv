@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.graphics.Color;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -53,6 +54,7 @@ import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDeviceAdapter.OnClickListener, ScanTask.Listener, NsdDeviceDiscovery.Listener {
 
@@ -389,6 +391,16 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
         syncCall.enqueue(callback(url, body, archive, mpvArchive, loginArchive, retry));
     }
 
+    private String readError(Response res) {
+        try {
+            ResponseBody body = res.body();
+            String text = body == null ? "" : body.string().trim();
+            if (!TextUtils.isEmpty(text)) return text.length() > 300 ? text.substring(0, 300) : text;
+        } catch (Exception ignored) {
+        }
+        return "HTTP " + res.code() + (TextUtils.isEmpty(res.message()) ? "" : " " + res.message());
+    }
+
     private void retry(String url, RequestBody body, SyncFiles.Archive archive, MpvConfigSync.Archive mpvArchive, LoginStateSync.Archive loginArchive, int retry, String msg) {
         if (!syncing) {
             if (archive != null) archive.delete();
@@ -437,7 +449,10 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
                         Notify.show(R.string.sync_success);
                         dismiss();
                     });
-                    else retry(url, body, archive, mpvArchive, loginArchive, retry, res.message());
+                    else {
+                        // 4xx 是请求本身的问题，重试无意义；仅 5xx 才重试，并把服务端返回的真实原因展示出来
+                        retry(url, body, archive, mpvArchive, loginArchive, res.code() < 500 ? MAX_RETRY : retry, readError(res));
+                    }
                 }
             }
         };

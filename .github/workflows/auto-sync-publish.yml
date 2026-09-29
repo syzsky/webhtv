@@ -61,9 +61,11 @@ jobs:
             echo "::error title=Merge conflict::上游改动与 fork 本地修改冲突，请人工处理后再同步"
             exit 1
           fi
-      - name: Push synced main        run: git push origin main
+      - name: Push synced main
+        run: git push origin main
 
-      - name: Trigger Android Release build        env:
+      - name: Trigger Android Release build
+        env:
           GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run android-release.yml --repo syzsky/webhtv --ref main

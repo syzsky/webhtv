@@ -210,7 +210,6 @@ public class GitCloudDialog extends BaseAlertDialog {
     protected void initEvent() {
         binding.close.setOnClickListener(view -> dismiss());
         binding.github.setOnClickListener(view -> selectProvider(GitProviderType.GITHUB));
-        binding.cnb.setOnClickListener(view -> selectProvider(GitProviderType.CNB));
         binding.accountSummary.setOnClickListener(view -> toggleAccountManager());
         binding.tokenLink.setOnClickListener(view -> open(tokenUrl()));
         binding.helpLink.setOnClickListener(view -> open(helpUrl()));
@@ -294,11 +293,7 @@ public class GitCloudDialog extends BaseAlertDialog {
 
         LinearLayoutCompat provider = row();
         binding.github = platformButton(R.drawable.ic_repo_github);
-        binding.cnb = platformButton(R.drawable.ic_repo_cnb);
         provider.addView(binding.github, new LinearLayoutCompat.LayoutParams(dp(38), dp(38)));
-        LinearLayoutCompat.LayoutParams cnbParams = new LinearLayoutCompat.LayoutParams(dp(38), dp(38));
-        cnbParams.leftMargin = dp(6);
-        provider.addView(binding.cnb, cnbParams);
         binding.accountSummary = compact("");
         LinearLayoutCompat.LayoutParams summaryParams = new LinearLayoutCompat.LayoutParams(0, dp(36), 1);
         summaryParams.leftMargin = dp(8);
@@ -445,7 +440,6 @@ public class GitCloudDialog extends BaseAlertDialog {
         boolean connected = account != null && account.providerType == providerType;
         boolean mainVisible = !editingAccount;
         binding.github.setChecked(providerType == GitProviderType.GITHUB);
-        binding.cnb.setChecked(providerType == GitProviderType.CNB);
         binding.baseUrl.layout.setVisibility(View.GONE);
         binding.accountSummary.setText(accountSummary());
         binding.accountCard.setVisibility(connected && editingAccount ? View.VISIBLE : View.GONE);
@@ -538,7 +532,6 @@ public class GitCloudDialog extends BaseAlertDialog {
         }
         String authToken = token;
         GitAccount target = account != null && account.providerType == providerType ? account : GitAccount.create(providerType, value(binding.baseUrl.edit), value(binding.alias.edit));
-        target.baseUrl = providerType == GitProviderType.CNB ? "https://cnb.cool" : value(binding.baseUrl.edit);
         target.remark = value(binding.alias.edit);
         run("校验账号中", () -> {
             GitCloudProvider provider = provider();
@@ -734,11 +727,9 @@ public class GitCloudDialog extends BaseAlertDialog {
         }
         String fullName = parseRepoFullName(keyword);
         if (isRepoAddress(keyword, fullName)) {
-            if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 浏览仓库需要先添加账号")) return;
             openRepoByFullName(fullName);
             return;
         }
-        if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 搜索需要先添加账号")) return;
         repoMode = REPO_MODE_SEARCH;
         repoSearchOwner = "";
         run("搜索仓库中", () -> {
@@ -883,7 +874,6 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void openRepo(GitRepo item) {
-        if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 浏览仓库需要先添加账号")) return;
         repo = item;
         currentPath = "";
         fileTree.clear();
@@ -2005,11 +1995,11 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private String label(GitProviderType type) {
-        return type == GitProviderType.CNB ? "CNB" : "GitHub";
+        return "GitHub";
     }
 
     private String defaultBaseUrl(GitProviderType type) {
-        return type == GitProviderType.CNB ? "https://cnb.cool" : "";
+        return "";
     }
 
     private String meta(GitAccount value) {
@@ -2571,11 +2561,11 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private String tokenUrl() {
-        return providerType == GitProviderType.CNB ? "https://cnb.cool" : "https://github.com/settings/personal-access-tokens";
+        return "https://github.com/settings/personal-access-tokens";
     }
 
     private String helpUrl() {
-        return providerType == GitProviderType.CNB ? "https://docs.cnb.cool/zh/guide/git-access.html" : "https://docs.github.com/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens";
+        return "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens";
     }
 
     private String value(TextInputEditText edit) {
@@ -2836,8 +2826,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         MaterialTextView progressText;
         MaterialButton close;
         MaterialButton github;
-        MaterialButton cnb;
-        MaterialButton accountSummary;
+            MaterialButton accountSummary;
         MaterialButton tokenLink;
         MaterialButton helpLink;
         MaterialButton save;

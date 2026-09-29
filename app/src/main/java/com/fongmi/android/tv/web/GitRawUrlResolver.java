@@ -28,10 +28,7 @@ public final class GitRawUrlResolver {
             result = github(uri, lowerHost, path);
             if (result != null) return result;
             result = gist(uri, lowerHost, path);
-            if (result != null) return result;
-            result = cnb(uri, lowerHost, path);
-            if (result != null) return result;
-            result = dashRaw(uri, lowerHost, path);
+            if (result != null) return result;            result = dashRaw(uri, lowerHost, path);
             if (result != null) return result;
             result = knownSimple(uri, lowerHost, path);
             if (result != null) return result;
@@ -44,12 +41,6 @@ public final class GitRawUrlResolver {
     public static String github(String owner, String repo, String ref, String path) {
         if (TextUtils.isEmpty(owner) || TextUtils.isEmpty(repo) || TextUtils.isEmpty(ref) || TextUtils.isEmpty(path)) return "";
         return "https://raw.githubusercontent.com/" + encode(owner) + "/" + encode(repo) + "/" + encodePath(ref) + "/" + encodePath(trimSlash(path));
-    }
-
-    public static String cnb(String baseUrl, String owner, String repo, String ref, String path) {
-        if (TextUtils.isEmpty(owner) || TextUtils.isEmpty(repo) || TextUtils.isEmpty(ref) || TextUtils.isEmpty(path)) return "";
-        String base = TextUtils.isEmpty(baseUrl) ? "https://cnb.cool" : baseUrl.replaceAll("/+$", "");
-        return base + "/" + encodePath(owner) + "/" + encodePath(repo) + "/-/git/raw/" + encodePath(ref) + "/" + encodePath(trimSlash(path));
     }
 
     private static RawUrl githubRaw(Uri uri, String host, String path) {
@@ -80,11 +71,7 @@ public final class GitRawUrlResolver {
         return new RawUrl(uri.toString(), uri.toString(), scope, path);
     }
 
-    private static RawUrl cnb(Uri uri, String host, String path) {
-        RawUrl result = marker(uri, host, path, "/-/git/raw/", "/-/git/raw/", "cnb:");
-        if (result != null) return result;
-        return marker(uri, host, path, "/-/git/blob/", "/-/git/raw/", "cnb:");
-    }
+
 
     private static RawUrl dashRaw(Uri uri, String host, String path) {
         String prefix = isKnownGitLab(host) ? "gitlab:" : "git-dash:";

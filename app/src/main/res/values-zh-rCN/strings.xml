@@ -154,9 +154,7 @@
     <string name="setting_player">播放设置</string>
     <string name="setting_danmaku">弹幕设置</string>
     <string name="setting_enhance">增强功能</string>
-    <string name="repo_github">GitHub 仓库</string>
-    <string name="repo_cnb">CNB 仓库</string>
-    <string name="setting_debug_log">调试日志</string>
+    <string name="repo_github">GitHub 仓库</string>    <string name="setting_debug_log">调试日志</string>
     <string name="setting_manage_page">管理页面</string>
     <string name="setting_remote_trust">远程托管</string>
     <string name="setting_git_cloud">Git 云盘</string>

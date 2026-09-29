@@ -355,11 +355,7 @@ public class WebHomeRawAdapter {
             return new RawUrl(uri.toString(), uri.toString(), scope, path);
         }
 
-        private static RawUrl cnb(Uri uri, String host, String path) {
-            RawUrl result = marker(uri, host, path, "/-/git/raw/", "/-/git/raw/", "cnb:");
-            if (result != null) return result;
-            return marker(uri, host, path, "/-/git/blob/", "/-/git/raw/", "cnb:");
-        }
+    
 
         private static RawUrl dashRaw(Uri uri, String host, String path) {
             String prefix = isKnownGitLab(host) ? "gitlab:" : "git-dash:";

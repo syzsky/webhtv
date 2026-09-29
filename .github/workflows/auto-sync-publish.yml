@@ -30,7 +30,7 @@ jobs:
 
       - name: Configure merge strategy
         run: |
-          # .gitattributes 中标记为 merge=ours 的文件（Github.java、CNB 占位文件）
+          
           # 合并上游时保留 fork 版本，避免冲突
           git config merge.ours.driver true
 
@@ -61,18 +61,9 @@ jobs:
             echo "::error title=Merge conflict::上游改动与 fork 本地修改冲突，请人工处理后再同步"
             exit 1
           fi
+      - name: Push synced main        run: git push origin main
 
-      - name: Strip CNB residue
-        if: success() && steps.check.outputs.has_update == 'true'
-        run: python3 .github/scripts/strip_cnb.py
-
-      - name: Push synced main
-        if: success() && steps.check.outputs.has_update == 'true'
-        run: git push origin main
-
-      - name: Trigger Android Release build
-        if: success() && steps.check.outputs.has_update == 'true'
-        env:
+      - name: Trigger Android Release build        env:
           GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run android-release.yml --repo syzsky/webhtv --ref main

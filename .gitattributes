@@ -4,3 +4,5 @@ app/src/main/java/com/fongmi/android/tv/utils/Github.java merge=ours
 # 更新源锁定为「本仓库 GitHub Release」，上游若要改回 OCI 分发，这里保留 fork 版本
 app/src/main/java/com/fongmi/android/tv/update/UpdateSource.java merge=ours
 app/src/main/java/com/fongmi/android/tv/update/UpdateRoutePlanner.java merge=ours
+# 这个 workflow 是 fork 独有的（上游没有），里面写死了 syzsky/webhtv 和 publish_oci=false
+.github/workflows/auto-sync-publish.yml merge=ours

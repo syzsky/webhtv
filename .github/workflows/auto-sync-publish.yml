@@ -69,7 +69,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run android-release.yml --repo syzsky/webhtv --ref main
+          # fork 定制：显式关掉 OCI 发布。
+          # 本 fork 没有配 OCI_REPOSITORY / OCI_USERNAME / OCI_TOKEN，
+          # 且客户端已把更新源锁定为本仓库的 GitHub Release（见 UpdateSource.normalize），
+          # OCI 通道整体不用了。默认 publish_oci=true 会让每次发布都白跑一遍 ORAS
+          # 再打一条 warning，这里直接关掉。
+          gh workflow run android-release.yml --repo syzsky/webhtv --ref main -f publish_oci=false
           echo "Android Release workflow triggered"
 
       - name: No upstream update

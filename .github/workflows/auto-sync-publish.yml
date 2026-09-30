@@ -30,13 +30,12 @@ jobs:
 
       - name: Configure merge strategy
         run: |
-          
           # 合并上游时保留 fork 版本，避免冲突
           git config merge.ours.driver true
 
       - name: Fetch upstream
         run: |
-          git remote add upstream https://github.com/fish2018/webhtv.git 2>/dev/null || git remote set-url upstream https://github.com/fish2018/webhtv.git
+          git remote add upstream https://github.com/webhtv/webhtv.git 2>/dev/null || git remote set-url upstream https://github.com/webhtv/webhtv.git
           git fetch upstream main
 
       - name: Check for upstream updates
@@ -62,9 +61,11 @@ jobs:
             exit 1
           fi
       - name: Push synced main
+        if: steps.check.outputs.has_update == 'true'
         run: git push origin main
 
       - name: Trigger Android Release build
+        if: steps.check.outputs.has_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: |

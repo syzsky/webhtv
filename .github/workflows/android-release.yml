@@ -128,30 +128,30 @@ jobs:
             echo "apk_suffix=$APK_SUFFIX"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Generate signing keystore (if not present)
+      - name: Configure release signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          mkdir -p keys
-          if [ ! -f keys/release.keystore ]; then
-            keytool -genkeypair \
-              -alias webhtv \
-              -keyalg RSA -keysize 2048 \
-              -validity 10000 \
-              -keystore keys/release.keystore \
-              -storepass webhtv123 \
-              -keypass webhtv123 \
-              -dname "CN=FongMi,OU=Android,O=WebHTV,L=Beijing,ST=Beijing,C=CN"
+          KS_BASE64="$RELEASE_KEYSTORE_BASE64"
+          STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
+          ALIAS="$RELEASE_KEY_ALIAS"
+          KEY_PASS="${RELEASE_KEY_PASSWORD:-$STORE_PASSWORD}"
+          if [ -z "$KS_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$ALIAS" ]; then
+            echo "::error title=Release signing not configured::Configure RELEASE_KEYSTORE_BASE64, RELEASE_KEY_ALIAS and RELEASE_STORE_PASSWORD in repository secrets."
+            exit 1
           fi
-          echo "✅ keystore 就绪"
-
-      - name: Configure signing
-        run: |
-          cat > local.properties << 'EOF'
-          storeFile=keys/release.keystore
-          storePassword=webhtv123
-          keyAlias=webhtv
-          keyPassword=webhtv123
-          EOF
-          echo "✅ local.properties 已配置"
+          mkdir -p app/signing
+          printf '%s' "$KS_BASE64" | base64 --decode > app/signing/release.jks
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/app/signing/release.jks"
+            echo "keyAlias=$ALIAS"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASS"
+          } > local.properties
+          echo "Release signing configured"
 
       - name: Build four release APKs
         env:
@@ -173,6 +173,31 @@ jobs:
           mkdir -p dist
           cp Release/apk/*.apk dist/
           ls -lh dist/
+
+      - name: Verify APK signing certificates
+        run: |
+          set -euo pipefail
+          BT_DIR="$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -z "$BT_DIR" ] || [ ! -x "${BT_DIR}apksigner" ]; then
+            echo "::warning title=apksigner unavailable::Skip signature verification."
+            exit 0
+          fi
+          FINGERPRINTS=""
+          for apk in dist/*.apk; do
+            FP="$("${BT_DIR}apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+            if [ -z "$FP" ]; then
+              echo "::error title=Unsigned APK::$apk has no signer certificate"
+              exit 1
+            fi
+            echo "$(basename "$apk") -> $FP"
+            FINGERPRINTS="${FINGERPRINTS}${FP}\n"
+          done
+          UNIQUE="$(printf '%b' "$FINGERPRINTS" | sort -u | wc -l)"
+          if [ "$UNIQUE" -ne 1 ]; then
+            echo "::error title=Signature mismatch::release APKs are signed with different certificates"
+            exit 1
+          fi
+          echo "All release APKs share the same signing certificate."
 
       - name: Set up ORAS
         id: oras

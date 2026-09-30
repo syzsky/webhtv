@@ -752,9 +752,10 @@
     <string name="sync_failed_with_reason">Sync failed: %1$s</string>
     <string name="sync_receive_success">Sync data received</string>
     <string name="sync_missing_params">Server did not receive the sync parameters: %1$s. The request body was not parsed or was truncated.</string>
-    <string name="sync_no_storage_permission">The receiving device has no storage permission, so it cannot write to shared storage. On that device, open WebHTV and grant all-files access (Android 11+) or storage permission, then sync again.</string>
-    <string name="sync_no_storage_permission_no_setting">The receiving device has no storage permission, and its system offers no way to grant all-files access. Shared-storage sync is unavailable on that device.</string>
-    <string name="sync_no_storage_permission_self">WebHTV on this device has no storage permission, so it cannot read or write the sync folders. Grant all-files access (Android 11+) or storage permission, then try again.</string>
+    <string name="sync_shared_storage_skipped">App data synced, but the shared-storage folders (TV / TVBox / TVData) were skipped: the receiving device has no storage permission. On that device, open the app and grant all-files access (Android 11+) or storage permission, then sync again to transfer those folders.</string>
+    <string name="sync_shared_storage_skipped_no_setting">App data synced, but the shared-storage folders (TV / TVBox / TVData) were skipped: the receiving device has no storage permission and its system offers no way to grant all-files access.</string>
+    <string name="sync_shared_storage_failed">App data synced, but writing the shared-storage folders (TV / TVBox / TVData) failed: %1$s</string>
+    <string name="sync_no_storage_permission_self">This device has no storage permission, so the sync folders cannot be read or written. Grant all-files access (Android 11+) or storage permission, then try again.</string>
     <string name="apk_push_url_busy">Another APK link download is already active</string>
     <string name="apk_push_url_schedule_failed">Unable to start the APK link download</string>
     <string name="apk_push_url_downloading">APK link received. Downloading on this device...</string>

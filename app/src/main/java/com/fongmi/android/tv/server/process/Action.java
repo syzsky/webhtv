@@ -204,10 +204,9 @@ public class Action implements Process {
                     // 而 NPE 的 getMessage() 是 null —— 客户端只会看到一句「同步失败」，查不出所以然。
                     String missing = missingSyncParams(params);
                     if (missing != null) return Nano.error(ResUtil.getString(R.string.sync_failed) + "\n" + missing);
-                    // fork 定制：接收方（电视端）没有存储权限时提前拦下来。
-                    String noStorage = noStorageReason(files);
-                    if (noStorage != null) return Nano.error(noStorage);
-                    syncBackup(params, files, force);
+                    String warning = syncBackup(params, files, force);
+                    // 共享存储没写成功时用 4xx：这类问题重试结果一样，别让客户端白重传一遍大归档。
+                    if (warning != null) return Nano.error(Response.Status.BAD_REQUEST, warning);
                 }
             }
             return success ? Nano.ok() : Nano.error(ResUtil.getString(R.string.sync_failed));
@@ -225,29 +224,19 @@ public class Action implements Process {
         return ResUtil.getString(R.string.sync_missing_params, missing.toString().trim());
     }
 
-    /**
-     * fork 定制：本机作为接收方时，SyncFiles.restoreArchive 会直接往 /sdcard 解压，
-     * 没有存储权限就失败，异常一路冒上来只剩一句「同步失败」，用户不知道该去开权限。
-     * 这里提前拦下来，并区分「系统有权限开关」和「系统压根没这个开关」两种情况。
-     * 只在上传了要落 /sdcard 的归档时才拦——MpvConfigSync 写的是应用私有目录，不需要权限。
-     */
-    private String noStorageReason(Map<String, String> files) {
-        if (files == null) return null;
-        boolean needStorage = files.containsKey(SyncFiles.PART_NAME) || files.containsKey(LoginStateSync.PART_NAME);
-        if (!needStorage || Setting.hasFileAccess()) return null;
-        SpiderDebug.log("sync", "reject: no file access, hasFileManager=%s", Setting.hasFileManager());
-        return ResUtil.getString(Setting.hasFileManager() ? R.string.sync_no_storage_permission : R.string.sync_no_storage_permission_no_setting);
-    }
-
     /** 把异常类名也带上——有些异常（例如 NPE）getMessage() 是 null，只回传 getMessage() 等于没说。 */
     private String syncError(Throwable e) {
+        return ResUtil.getString(R.string.sync_failed) + "\n" + syncErrorDetail(e);
+    }
+
+    private String syncErrorDetail(Throwable e) {
         StringBuilder detail = new StringBuilder(e.getClass().getSimpleName());
         if (!TextUtils.isEmpty(e.getMessage())) detail.append(": ").append(e.getMessage());
         for (Throwable cause = e.getCause(); cause != null && cause != e; cause = cause.getCause()) {
             detail.append(" <- ").append(cause.getClass().getSimpleName());
             if (!TextUtils.isEmpty(cause.getMessage())) detail.append(": ").append(cause.getMessage());
         }
-        return ResUtil.getString(R.string.sync_failed) + "\n" + detail;
+        return detail.toString();
     }
 
     private Response onApk(Map<String, String> params, Map<String, String> files) {
@@ -408,15 +397,35 @@ public class Action implements Process {
         return body.build();
     }
 
-    private void syncBackup(Map<String, String> params, Map<String, String> files, boolean force) {
+    /**
+     * 还原备份。返回 null 表示全部成功；返回非 null 表示「应用数据已还原，但共享存储目录被跳过」，
+     * 由调用方回给客户端（用 4xx，避免无意义重试）。
+     *
+     * fork 定制：写 /sdcard 需要存储权限（Android 11+ 是 MANAGE_EXTERNAL_STORAGE）。
+     * 没有权限时不再 throw 打断整次同步——收藏 / 历史 / 设置 / 源都在应用私有目录
+     * （Room + SharedPreferences），照样能还原；只有共享存储下的 TV / TVBox / TVData 需要写权限。
+     * 整次失败会让用户连这些也拿不到，如实告知「哪些被跳过」更有用。
+     *
+     * 注意反方向 sendBackup 只「读」/sdcard（临时 zip 写 Path.cache() 私有目录），
+     * 所以只需要读权限——这正是「手机能拉取、不能推送」的原因。
+     */
+    private String syncBackup(Map<String, String> params, Map<String, String> files, boolean force) {
         Backup backup = Backup.objectFrom(params.get("backup"));
         SyncOptions options = SyncOptions.objectFrom(params.get("options"));
+        boolean fileAccess = Setting.hasFileAccess();
+        String warning = null;
         if (SyncFiles.hasPaths(options) && files.containsKey(SyncFiles.PART_NAME)) {
             File archive = new File(files.get(SyncFiles.PART_NAME));
             try {
-                SyncFiles.restoreArchive(archive);
+                if (fileAccess) {
+                    SyncFiles.restoreArchive(archive);
+                } else {
+                    SpiderDebug.log("sync", "skip shared-storage restore: no file access, hasFileManager=%s", Setting.hasFileManager());
+                    warning = sharedStorageWarning();
+                }
             } catch (Exception e) {
-                throw new IllegalStateException(e);
+                SpiderDebug.log("sync", e);
+                warning = ResUtil.getString(R.string.sync_shared_storage_failed, syncErrorDetail(e));
             } finally {
                 Path.clear(archive);
             }
@@ -437,6 +446,9 @@ public class Action implements Process {
                 LoginStateSync.restoreArchive(archive);
             } catch (Exception e) {
                 SpiderDebug.log("sync", e);
+                // 登录态归档里可能含学习到的 /sdcard 路径，没权限时同样写不进去。
+                // 走的是同一句提示，不另起文案。
+                if (warning == null && !fileAccess) warning = sharedStorageWarning();
             } finally {
                 Path.clear(archive);
             }
@@ -444,6 +456,12 @@ public class Action implements Process {
         backup.restore(options, force);
         if (options.isRemoteRelay()) RemoteStore.importRelayConfig(params.get("remoteRelay"));
         App.post(() -> Notify.show(R.string.sync_receive_success));
+        return warning;
+    }
+
+    /** 「应用数据已同步，但共享存储被跳过」——区分系统有没有权限开关，好让用户知道还能不能救。 */
+    private String sharedStorageWarning() {
+        return ResUtil.getString(Setting.hasFileManager() ? R.string.sync_shared_storage_skipped : R.string.sync_shared_storage_skipped_no_setting);
     }
 
     public void syncHistory(Map<String, String> params, boolean force) {

@@ -804,8 +804,9 @@
     <string name="sync_failed_with_reason">同步失败：%1$s</string>
     <string name="sync_receive_success">已接收同步数据</string>
     <string name="sync_missing_params">服务端没有收到同步参数：%1$s。请求内容未解析成功或被截断。</string>
-    <string name="sync_no_storage_permission">接收端没有存储权限，无法写入共享存储。请在接收端打开剧情，授予「所有文件访问」（Android 11 及以上）或存储权限后重新同步。</string>
-    <string name="sync_no_storage_permission_no_setting">接收端没有存储权限，且该系统未提供「所有文件访问」设置项，无法在该设备上同步共享存储内容。</string>
+    <string name="sync_shared_storage_skipped">应用数据已同步，但共享存储目录（TV / TVBox / TVData）被跳过：接收端没有存储权限。请在接收端打开剧情，授予「所有文件访问」（Android 11 及以上）或存储权限后重新同步，以传输这些目录。</string>
+    <string name="sync_shared_storage_skipped_no_setting">应用数据已同步，但共享存储目录（TV / TVBox / TVData）被跳过：接收端没有存储权限，且该系统未提供「所有文件访问」设置项。</string>
+    <string name="sync_shared_storage_failed">应用数据已同步，但写入共享存储目录（TV / TVBox / TVData）失败：%1$s</string>
     <string name="sync_no_storage_permission_self">本机没有存储权限，无法读写同步目录。请授予「所有文件访问」（Android 11 及以上）或存储权限后重试。</string>
     <string name="apk_push_url_busy">已有 APK 链接下载任务正在进行</string>
     <string name="apk_push_url_schedule_failed">无法启动 APK 链接下载</string>

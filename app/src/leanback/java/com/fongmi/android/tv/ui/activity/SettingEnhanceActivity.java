@@ -40,7 +40,7 @@ import com.github.catvod.crawler.SpiderDebug;
 
 public class SettingEnhanceActivity extends BaseActivity {
 
-    private static final String URL_GITHUB = "https://github.com/fish2018/webhtv";
+    private static final String URL_GITHUB = "https://github.com/syzsky/webhtv";
 
     private ActivitySettingEnhanceBinding mBinding;
 

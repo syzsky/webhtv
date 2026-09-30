@@ -27,8 +27,8 @@ import com.google.android.material.tabs.TabLayout;
 
 public final class UpdateSettingsDialog {
 
-    private static final int TAB_OCI = 0;
-    private static final int TAB_GITHUB = 1;
+    // fork 定制：OCI 更新源已禁用，只保留 GitHub Release 一个页签
+    private static final int TAB_GITHUB = 0;
 
     private UpdateSettingsDialog() {
     }
@@ -60,20 +60,20 @@ public final class UpdateSettingsDialog {
     private static void setupTabs(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         binding.sourceTabs.setTabMode(TabLayout.MODE_FIXED);
         binding.sourceTabs.setTabGravity(TabLayout.GRAVITY_FILL);
-        binding.sourceTabs.addTab(binding.sourceTabs.newTab().setText(R.string.update_source_oci), false);
+        // fork 定制：不再添加 OCI 页签，更新源固定为本仓库 GitHub Release
         binding.sourceTabs.addTab(binding.sourceTabs.newTab().setText(R.string.update_source_github), false);
         binding.sourceTabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
-                state.source = tab.getPosition() == TAB_GITHUB ? UpdateSource.GITHUB : UpdateSource.OCI;
+                state.source = UpdateSource.GITHUB;
                 renderSource(binding, state);
             }
 
             @Override public void onTabUnselected(TabLayout.Tab tab) { }
             @Override public void onTabReselected(TabLayout.Tab tab) { }
         });
-        int position = UpdateSource.GITHUB.equals(state.source) ? TAB_GITHUB : TAB_OCI;
-        binding.sourceTabs.selectTab(binding.sourceTabs.getTabAt(position));
+        state.source = UpdateSource.GITHUB;
+        binding.sourceTabs.selectTab(binding.sourceTabs.getTabAt(TAB_GITHUB));
     }
 
     private static void chooseGithub(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
@@ -226,8 +226,8 @@ public final class UpdateSettingsDialog {
         if (binding.sourceTabs.getChildCount() == 0) return false;
         View strip = binding.sourceTabs.getChildAt(0);
         if (!(strip instanceof ViewGroup tabs)) return false;
-        int position = Math.max(TAB_OCI, binding.sourceTabs.getSelectedTabPosition());
-        if (position >= tabs.getChildCount()) position = TAB_OCI;
+        int position = Math.max(TAB_GITHUB, binding.sourceTabs.getSelectedTabPosition());
+        if (position >= tabs.getChildCount()) position = TAB_GITHUB;
         return tabs.getChildAt(position).requestFocus();
     }
 

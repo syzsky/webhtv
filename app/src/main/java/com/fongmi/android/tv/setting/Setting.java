@@ -670,7 +670,8 @@ public class Setting {
     }
 
     public static String getUpdateSource() {
-        return UpdateSource.normalize(Prefers.getString("update_source", UpdateSource.OCI));
+        // fork 定制：默认走本仓库 GitHub Release，不再默认上游的 OCI 通道
+        return UpdateSource.normalize(Prefers.getString("update_source", UpdateSource.GITHUB));
     }
 
     public static void putUpdateSource(String source) {

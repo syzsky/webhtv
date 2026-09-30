@@ -207,3 +207,21 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.7.0'
     testImplementation libs.okhttp.mockwebserver
 }
+
+// ---------------------------------------------------------------------------
+// fork 定制：release 构建必须使用固定签名（由 .github/workflows/android-release.yml
+// 从 RELEASE_KEYSTORE_BASE64 解出 app/signing/release.jks 并写入 local.properties）。
+//
+// 上游逻辑是 `signingConfig = hasReleaseSigning ? release : debug`：一旦签名没配好，
+// 就静默用 debug keystore 签名。debug keystore 每台机器、每次构建都不同，产出的 APK
+// 既盖不上正式版，也盖不上自己上一次的包 —— 表现就是「安装失败：签名不一致」。
+//
+// 这里宁可让构建失败，也不产出一个人装不上的 APK。
+gradle.taskGraph.whenReady { graph ->
+    def assemblingRelease = graph.allTasks.any { task -> task.name ==~ /assemble.*Release/ }
+    if (assemblingRelease && !hasReleaseSigning) {
+        throw new GradleException(
+                'Release 签名未配置：local.properties 缺少 storeFile / keyAlias / storePassword（可选 keyPassword）。' +
+                ' 发布包必须用固定 keystore 签名，禁止回退 debug 签名。')
+    }
+}

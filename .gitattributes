@@ -1,3 +1,6 @@
 # fork 定制：与上游同步时，以下文件保留本仓库版本（merge=ours），避免冲突
 # 需在 workflow 中执行 `git config merge.ours.driver true` 才会生效
 app/src/main/java/com/fongmi/android/tv/utils/Github.java merge=ours
+# 更新源锁定为「本仓库 GitHub Release」，上游若要改回 OCI 分发，这里保留 fork 版本
+app/src/main/java/com/fongmi/android/tv/update/UpdateSource.java merge=ours
+app/src/main/java/com/fongmi/android/tv/update/UpdateRoutePlanner.java merge=ours

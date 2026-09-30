@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.server.process;
 
+import android.os.Build;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
@@ -459,9 +460,18 @@ public class Action implements Process {
         return warning;
     }
 
-    /** 「应用数据已同步，但共享存储被跳过」——区分系统有没有权限开关，好让用户知道还能不能救。 */
+    /**
+     * 「应用数据已同步，但共享存储被跳过」——区分「还能救」和「救不了」，用户才知道下一步做什么。
+     *
+     * 别直接拿 Setting.hasFileManager() 当判据：它在 Android 10 及以下恒为 false，
+     * 但那些系统是走运行时 READ/WRITE_EXTERNAL_STORAGE 的（见 PermissionUtil.requestFile），
+     * 用户照样能在应用权限里开出来。真正无解的情况只有一种：
+     * Android 11+ 且系统没提供「所有文件访问」设置页 —— 这时回退申请
+     * WRITE_EXTERNAL_STORAGE 也没用，manifest 里它 maxSdkVersion=29。
+     */
     private String sharedStorageWarning() {
-        return ResUtil.getString(Setting.hasFileManager() ? R.string.sync_shared_storage_skipped : R.string.sync_shared_storage_skipped_no_setting);
+        boolean grantable = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Setting.hasFileManager();
+        return ResUtil.getString(grantable ? R.string.sync_shared_storage_skipped : R.string.sync_shared_storage_skipped_no_setting);
     }
 
     public void syncHistory(Map<String, String> params, boolean force) {

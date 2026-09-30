@@ -124,7 +124,7 @@ public class JGitDriveEngine implements GitDriveEngine {
     }
 
     private UsernamePasswordCredentialsProvider credentials(GitDriveConfig config) {
-        String username = config.account.providerType == GitProviderType.CNB ? "cnb" : config.account.username;
+        String username = config.account.username;
         if (TextUtils.isEmpty(username)) username = "x-access-token";
         return new UsernamePasswordCredentialsProvider(username, config.token);
     }

@@ -197,13 +197,39 @@ public class Action implements Process {
             if (mode.equals("0") || mode.equals("1")) {
                 if ("history".equals(type)) syncHistory(params, force);
                 else if ("keep".equals(type)) syncKeep(params, force);
-                else if ("backup".equals(type)) syncBackup(params, files, force);
+                else if ("backup".equals(type)) {
+                    // fork 定制：请求体没解析出 options/backup 时直接给出可读原因。
+                    // 否则会一路走到 Backup.restore 里 insertOrUpdate(null) 的 NPE，
+                    // 而 NPE 的 getMessage() 是 null —— 客户端只会看到一句「同步失败」，查不出所以然。
+                    String missing = missingSyncParams(params);
+                    if (missing != null) return Nano.error(ResUtil.getString(R.string.sync_failed) + "\n" + missing);
+                    syncBackup(params, files, force);
+                }
             }
             return success ? Nano.ok() : Nano.error(ResUtil.getString(R.string.sync_failed));
         } catch (Exception e) {
             SpiderDebug.log("sync", e);
-            return Nano.error(Notify.getError(R.string.sync_failed, e));
+            return Nano.error(syncError(e));
         }
+    }
+
+    private String missingSyncParams(Map<String, String> params) {
+        StringBuilder missing = new StringBuilder();
+        if (TextUtils.isEmpty(params.get("options"))) missing.append("options ");
+        if (TextUtils.isEmpty(params.get("backup"))) missing.append("backup ");
+        if (missing.length() == 0) return null;
+        return "服务端未解析到请求参数：" + missing.toString().trim() + "（multipart 请求体解析失败或被截断）";
+    }
+
+    /** 把异常类名也带上——有些异常（例如 NPE）getMessage() 是 null，只回传 getMessage() 等于没说。 */
+    private String syncError(Throwable e) {
+        StringBuilder detail = new StringBuilder(e.getClass().getSimpleName());
+        if (!TextUtils.isEmpty(e.getMessage())) detail.append(": ").append(e.getMessage());
+        for (Throwable cause = e.getCause(); cause != null && cause != e; cause = cause.getCause()) {
+            detail.append(" <- ").append(cause.getClass().getSimpleName());
+            if (!TextUtils.isEmpty(cause.getMessage())) detail.append(": ").append(cause.getMessage());
+        }
+        return ResUtil.getString(R.string.sync_failed) + "\n" + detail;
     }
 
     private Response onApk(Map<String, String> params, Map<String, String> files) {

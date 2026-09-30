@@ -40,6 +40,7 @@ import com.github.catvod.net.OkHttp;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
 import java.io.IOException;
@@ -352,10 +353,7 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
                 request(url, body, archive, mpvArchive, loginArchive, 0);
             } catch (Exception e) {
                 if (!syncing) return;
-                App.post(() -> {
-                    setSyncing(false);
-                    Notify.show(getString(R.string.sync_failed_with_reason, e.getMessage()));
-                });
+                App.post(() -> showFailure(e.getClass().getSimpleName() + (TextUtils.isEmpty(e.getMessage()) ? "" : ": " + e.getMessage())));
             }
         });
     }
@@ -412,10 +410,7 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
             if (archive != null) archive.delete();
             if (mpvArchive != null) mpvArchive.delete();
             if (loginArchive != null) loginArchive.delete();
-            App.post(() -> {
-                setSyncing(false);
-                Notify.show(getString(R.string.sync_failed_with_reason, msg));
-            });
+            App.post(() -> showFailure(msg));
         } else {
             Task.schedule(() -> request(url, body, archive, mpvArchive, loginArchive, retry + 1), RETRY_DELAY, TimeUnit.MILLISECONDS);
         }
@@ -477,6 +472,25 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
         else {
             setSyncing(false);
             Notify.show(R.string.sync_canceled);
+        }
+    }
+
+    /**
+     * fork 定制：同步失败时把完整原因用对话框展示。
+     * 原来走 Notify.show(...) 是系统 Toast，最多两行、超出部分被截断，
+     * 用户只能看到「同步失败：同步失败」这种，根本没法定位。
+     */
+    private void showFailure(String reason) {
+        setSyncing(false);
+        String text = TextUtils.isEmpty(reason) ? getString(R.string.sync_failed) : reason;
+        try {
+            new MaterialAlertDialogBuilder(requireActivity(), R.style.Theme_WebHTV_LightDialog)
+                    .setTitle(R.string.sync_failed)
+                    .setMessage(text)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        } catch (Exception e) {
+            Notify.show(getString(R.string.sync_failed_with_reason, text));
         }
     }
 

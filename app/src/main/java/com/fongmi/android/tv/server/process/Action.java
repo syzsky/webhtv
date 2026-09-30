@@ -22,6 +22,7 @@ import com.fongmi.android.tv.server.Nano;
 import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.server.impl.Process;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.LoginStateSync;
 import com.fongmi.android.tv.utils.MpvConfigSync;
@@ -203,6 +204,9 @@ public class Action implements Process {
                     // 而 NPE 的 getMessage() 是 null —— 客户端只会看到一句「同步失败」，查不出所以然。
                     String missing = missingSyncParams(params);
                     if (missing != null) return Nano.error(ResUtil.getString(R.string.sync_failed) + "\n" + missing);
+                    // fork 定制：接收方（电视端）没有存储权限时提前拦下来。
+                    String noStorage = noStorageReason(files);
+                    if (noStorage != null) return Nano.error(noStorage);
                     syncBackup(params, files, force);
                 }
             }
@@ -218,7 +222,21 @@ public class Action implements Process {
         if (TextUtils.isEmpty(params.get("options"))) missing.append("options ");
         if (TextUtils.isEmpty(params.get("backup"))) missing.append("backup ");
         if (missing.length() == 0) return null;
-        return "服务端未解析到请求参数：" + missing.toString().trim() + "（multipart 请求体解析失败或被截断）";
+        return ResUtil.getString(R.string.sync_missing_params, missing.toString().trim());
+    }
+
+    /**
+     * fork 定制：本机作为接收方时，SyncFiles.restoreArchive 会直接往 /sdcard 解压，
+     * 没有存储权限就失败，异常一路冒上来只剩一句「同步失败」，用户不知道该去开权限。
+     * 这里提前拦下来，并区分「系统有权限开关」和「系统压根没这个开关」两种情况。
+     * 只在上传了要落 /sdcard 的归档时才拦——MpvConfigSync 写的是应用私有目录，不需要权限。
+     */
+    private String noStorageReason(Map<String, String> files) {
+        if (files == null) return null;
+        boolean needStorage = files.containsKey(SyncFiles.PART_NAME) || files.containsKey(LoginStateSync.PART_NAME);
+        if (!needStorage || Setting.hasFileAccess()) return null;
+        SpiderDebug.log("sync", "reject: no file access, hasFileManager=%s", Setting.hasFileManager());
+        return ResUtil.getString(Setting.hasFileManager() ? R.string.sync_no_storage_permission : R.string.sync_no_storage_permission_no_setting);
     }
 
     /** 把异常类名也带上——有些异常（例如 NPE）getMessage() 是 null，只回传 getMessage() 等于没说。 */

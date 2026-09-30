@@ -330,6 +330,13 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
             return;
         }
         SyncOptions options = options();
+        // fork 定制：本机没有存储权限时提前拦下来。
+        // 推送方向下 SyncFiles.createArchive 会静默产出空归档，对端照样回「同步成功」，
+        // 但一个文件都没过去；拉取方向下则是 restoreArchive 往 /sdcard 写失败。
+        if (SyncFiles.hasPaths(options) && !Setting.hasFileAccess()) {
+            showFailure(getString(R.string.sync_no_storage_permission_self));
+            return;
+        }
         String mode = toRemote ? "1" : "2";
         String url = String.format(Locale.getDefault(), "%s/action?do=sync&mode=%s&type=backup", selected.getIp(), mode);
         binding.start.setEnabled(false);

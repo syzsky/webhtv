@@ -86,7 +86,6 @@ jobs:
         id: meta
         run: |
           VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -1)"
-          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -1)"
           CHANNEL="${{ inputs.release_channel }}"
           if [ "$CHANNEL" = "auto" ] || [ -z "$CHANNEL" ]; then
             if [ "${{ github.ref_name }}" = "fongmi-sync" ]; then
@@ -110,6 +109,9 @@ jobs:
           if [ -z "$TAG" ]; then
             TAG="$TAG_DEFAULT"
           fi
+          # fork 定制：versionCode 由 tag 内的 yyyyMMddHHmm 推导（后 9 位，避免 int32 溢出），
+          # 与 app/build.gradle 的计算规则严格一致，保证 APK 内 code 与发布清单 json 的 code 相同。
+          VERSION_CODE="$(( 10#${TAG: -9} ))"
           if ! printf '%s' "$TAG" | grep -Eq "$TAG_PATTERN"; then
             echo "::error title=Invalid release tag::Expected $TAG_EXPECT, got: $TAG"
             exit 1

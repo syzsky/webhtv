@@ -28,6 +28,17 @@ try {
     }
 } catch (Exception ignored) { /* Source archives may not contain Git metadata. */ }
 
+// ---------------------------------------------------------------------------
+// fork 定制：versionCode 必须随每次构建单调递增。
+// 应用内更新按 code 比较版本，恒为 561 会导致永远显示"已最新"、更新闭环失效。
+// 取值规则与 CI(.github/workflows/android-release.yml) 严格一致：
+//   取构建时间戳 yyyyMMddHHmm 的后 9 位（12 位/10 位均会溢出 int32 上限 2147483647）。
+//   例：2026-10-08 15:30 -> 202610081530 -> 610081530
+def tagStampMatcher = releaseTag =~ /\d{12}$/
+def versionCodeSource = (tagStampMatcher.find() ? tagStampMatcher.group() : buildTimestamp).toString()
+def versionCodeValue = versionCodeSource.substring(3).toInteger()
+
+
 android {
     namespace = 'com.fongmi.android.tv'
 
@@ -38,7 +49,7 @@ android {
         applicationId "com.fongmi.android.tv"
         minSdk libs.versions.minSdk.get().toInteger()
         targetSdk libs.versions.targetSdk.get().toInteger()
-        versionCode 561
+        versionCode versionCodeValue
         versionName "5.6.0"
         buildConfigField "String", "BUILD_TIME", "\"${buildTime}\""
         buildConfigField "String", "BUILD_TAG", "\"${releaseTag}\""
@@ -93,6 +104,11 @@ android {
 
     signingConfigs {
         release {
+            // fork 定制：同时输出 V1(JAR) 与 V2 签名。
+            // 仅 V2 签名的包在部分电视/魔改 ROM（以及 Android 7.0 定制系统）上会被
+            // 安装器拒绝，表象就是"签名问题 / 安装包异常"。
+            v1SigningEnabled true
+            v2SigningEnabled true
             if (hasReleaseSigning) {
                 storeFile file(localProps['storeFile'])
                 keyAlias localProps['keyAlias']

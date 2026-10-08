@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.graphics.Color;
+import android.net.Uri;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +9,8 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -34,6 +37,7 @@ import com.fongmi.android.tv.utils.MpvConfigSync;
 import com.fongmi.android.tv.utils.ProgressRequestBody;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.ScanTask;
+import com.fongmi.android.tv.utils.SharedDirAccess;
 import com.fongmi.android.tv.utils.SyncFiles;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.net.OkHttp;
@@ -65,6 +69,8 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
     private static final String TAG = "one_key_sync";
 
     private final OkHttpClient client;
+
+    private final ActivityResultLauncher<Uri> sharedAuthLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), this::onSharedAuthResult);
 
     private DialogOneKeySyncBinding binding;
     private SyncDeviceAdapter adapter;
@@ -109,6 +115,7 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
         binding.recycler.setAdapter(adapter = new SyncDeviceAdapter(this));
         updateDevice(binding.localName, binding.localHost, binding.localIcon, Device.get());
         updateDirection();
+        updateSharedAuth();
         getDevice();
     }
 
@@ -120,6 +127,7 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
         binding.selectAll.setOnClickListener(v -> toggleSelection());
         binding.spider.setOnCheckedChangeListener((buttonView, isChecked) -> updateSyncPathsVisible());
         binding.syncPaths.setOnClickListener(v -> SyncPathDialog.show(this, this::updateSyncPathSummary));
+        binding.sharedAuth.setOnClickListener(v -> pickSharedAuth());
         binding.start.setOnClickListener(v -> {
             if (syncing) cancelSync();
             else startSync();
@@ -199,6 +207,31 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
 
     private void updateSyncPathsVisible() {
         binding.syncPaths.setVisibility(binding.spider.isChecked() ? View.VISIBLE : View.GONE);
+        binding.sharedAuth.setVisibility(binding.spider.isChecked() ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateSharedAuth() {
+        String granted = SharedDirAccess.describe();
+        binding.sharedAuthSummary.setText(TextUtils.isEmpty(granted) ? getString(R.string.sync_shared_auth_none) : getString(R.string.sync_shared_auth_done, granted));
+    }
+
+    private void pickSharedAuth() {
+        try {
+            sharedAuthLauncher.launch(null);
+        } catch (Exception e) {
+            Notify.show(R.string.sync_shared_auth_unsupported);
+        }
+    }
+
+    private void onSharedAuthResult(Uri uri) {
+        if (uri == null) return;
+        if (SharedDirAccess.relativePath(uri) == null) {
+            Notify.show(R.string.sync_shared_auth_unsupported);
+            return;
+        }
+        SharedDirAccess.save(uri);
+        updateSharedAuth();
+        Notify.show(R.string.sync_shared_auth_saved);
     }
 
     private SyncOptions options() {
@@ -333,7 +366,8 @@ public class OneKeySyncDialog extends BaseBottomSheetDialog implements SyncDevic
         // fork 定制：本机没有存储权限时提前拦下来。
         // 推送方向下 SyncFiles.createArchive 会静默产出空归档，对端照样回「同步成功」，
         // 但一个文件都没过去；拉取方向下则是 restoreArchive 往 /sdcard 写失败。
-        if (SyncFiles.hasPaths(options) && !Setting.hasFileAccess()) {
+        // 已有 SAF 目录授权（系统没有「所有文件访问」设置项的电视）时不拦，读写都走树 URI。
+        if (SyncFiles.hasPaths(options) && !Setting.hasFileAccess() && !SharedDirAccess.covers(SyncFiles.getPaths(options))) {
             showFailure(getString(R.string.sync_no_storage_permission_self));
             return;
         }

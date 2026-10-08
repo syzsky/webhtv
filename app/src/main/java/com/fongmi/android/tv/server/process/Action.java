@@ -30,6 +30,7 @@ import com.fongmi.android.tv.utils.MpvConfigSync;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ProgressRequestBody;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.SharedDirAccess;
 import com.fongmi.android.tv.utils.SyncFiles;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.net.OkHttp;
@@ -420,6 +421,18 @@ public class Action implements Process {
             try {
                 if (fileAccess) {
                     SyncFiles.restoreArchive(archive);
+                } else if (SharedDirAccess.hasAny()) {
+                    // fork 定制：没有「所有文件访问」时走 SAF 目录授权（接收端在同步面板授权一次即可），
+                    // 不再直接放弃——电视 ROM 常常连授权设置页都没有。
+                    SharedDirAccess.Stats stats = new SharedDirAccess.Stats();
+                    SharedDirAccess.restore(archive, stats);
+                    if (stats.getRestored() == 0) {
+                        warning = sharedStorageWarning();
+                    } else if (stats.getFailed() > 0) {
+                        warning = ResUtil.getString(R.string.sync_shared_storage_saf_failed, stats.getFailed());
+                    } else if (!stats.getSkipped().isEmpty()) {
+                        warning = ResUtil.getString(R.string.sync_shared_storage_skipped_partial, TextUtils.join(" / ", stats.getSkipped()));
+                    }
                 } else {
                     SpiderDebug.log("sync", "skip shared-storage restore: no file access, hasFileManager=%s", Setting.hasFileManager());
                     warning = sharedStorageWarning();
@@ -468,6 +481,9 @@ public class Action implements Process {
      * 用户照样能在应用权限里开出来。真正无解的情况只有一种：
      * Android 11+ 且系统没提供「所有文件访问」设置页 —— 这时回退申请
      * WRITE_EXTERNAL_STORAGE 也没用，manifest 里它 maxSdkVersion=29。
+     *
+     * fork 定制：这种情况下接收端可以用「共享目录授权」（SAF，见 SharedDirAccess）曲线写入，
+     * 所以 no_setting 文案要顺带给出授权入口，而不是只说「无解」。
      */
     private String sharedStorageWarning() {
         boolean grantable = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Setting.hasFileManager();

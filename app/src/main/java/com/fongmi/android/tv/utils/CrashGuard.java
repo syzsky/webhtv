@@ -44,8 +44,10 @@ public final class CrashGuard {
                 SpiderDebug.log(TAG, "uncaught thread=%s\n%s", thread == null ? "unknown" : thread.getName(), detail);
             } catch (Throwable ignored) {
             }
-            if (thread != null && thread == Looper.getMainLooper().getThread()) return;
-            if (previous != null) {
+            // 任何线程的未捕获异常都只落盘，不再转交系统默认 handler：
+            // 旧逻辑对非主线程调用 previous.uncaughtException，会让进程被系统直接杀掉，
+            // 表现就是"闪退且拿不到日志"（源失效、蜘蛛壳 abort、后台线程 NPE 都会走到这里）。
+            if (throwable instanceof OutOfMemoryError && previous != null) {
                 try {
                     previous.uncaughtException(thread, throwable);
                 } catch (Throwable ignored) {

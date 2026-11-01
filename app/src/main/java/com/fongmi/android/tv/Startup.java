@@ -30,7 +30,11 @@ public class Startup implements Initializer<Void> {
         if (PlaybackRecoveryMonitor.isRecoveryProcess(context)) return null;
         CaocConfig.Builder.create().trackActivities(true).backgroundMode(CaocConfig.BACKGROUND_MODE_SILENT).errorActivity(CrashActivity.class).apply();
         Logger.addLogAdapter(new AndroidLogAdapter(PrettyFormatStrategy.newBuilder().methodCount(0).showThreadInfo(false).tag("TV").build()));
-        EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();
+        try {
+            EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();
+        } catch (Throwable ignored) {
+            // 重复初始化 / 索引缺失时不要拖死启动流程（此处早于 Application.onCreate，闪退无日志）
+        }
         OkHttp.dns().setDoh(() -> Doh.objectFrom(Setting.getDoh()));
         return null;
     }

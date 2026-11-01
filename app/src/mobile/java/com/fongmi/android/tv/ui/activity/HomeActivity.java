@@ -50,6 +50,7 @@ import com.fongmi.android.tv.utils.UrlUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.WebHomeChromeStartup;
 import com.fongmi.android.tv.web.WebHomeViewport;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.google.android.material.navigation.NavigationBarView;
 import com.google.gson.JsonObject;
@@ -157,9 +158,28 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void initConfig() {
-        VodConfig.get().config(mStartupConfig == null ? Config.vod() : mStartupConfig).load(getCallback());
-        LiveConfig.get().init().load();
-        WallConfig.get().init();
+        try {
+            VodConfig.get().config(mStartupConfig == null ? Config.vod() : mStartupConfig).load(getCallback());
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "vod config init failed: %s", e);
+            e.printStackTrace();
+            try {
+                StateEvent.empty();
+            } catch (Throwable ignored) {
+            }
+        }
+        try {
+            LiveConfig.get().init().load();
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "live config init failed: %s", e);
+            e.printStackTrace();
+        }
+        try {
+            WallConfig.get().init();
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "wall config init failed: %s", e);
+            e.printStackTrace();
+        }
     }
 
     private Callback getCallback() {

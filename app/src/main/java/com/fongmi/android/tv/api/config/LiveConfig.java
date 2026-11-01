@@ -18,9 +18,11 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.CustomCspSetting;
 import com.fongmi.android.tv.setting.LiveSetting;
+import com.fongmi.android.tv.utils.ConfigCache;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.github.catvod.bean.Header;
 import com.github.catvod.bean.Proxy;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.google.gson.JsonObject;
 
@@ -40,6 +42,7 @@ public class LiveConfig extends BaseConfig {
     private List<Live> lives;
     private List<Rule> rules;
     private List<String> ads;
+    private boolean restoring;
 
     public static LiveConfig get() {
         return Loader.INSTANCE;
@@ -123,9 +126,40 @@ public class LiveConfig extends BaseConfig {
             initLive(config, new JsonObject());
             return;
         }
-        String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
-        if (Json.isObj(json)) checkJson(config, Json.parse(json).getAsJsonObject());
-        else parseText(config, json);
+        try {
+            String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
+            if (Json.isObj(json)) checkJson(config, Json.parse(json).getAsJsonObject());
+            else parseText(config, json);
+            ConfigCache.save(config.getUrl(), json);
+        } catch (Throwable e) {
+            if (restoreFromCache(config, e)) return;
+            throw e;
+        }
+    }
+
+    /**
+     * 源地址失效时的兜底：改用上一次成功拉取的直播源快照。
+     */
+    private boolean restoreFromCache(Config config, Throwable cause) {
+        if (restoring || config == null) return false;
+        String json = ConfigCache.load(config.getUrl());
+        if (TextUtils.isEmpty(json)) {
+            SpiderDebug.log("config-cache", "no live snapshot url=%s cause=%s", config.getUrl(), cause == null ? "unknown" : cause.getMessage());
+            return false;
+        }
+        SpiderDebug.log("config-cache", "fallback live snapshot url=%s", config.getUrl());
+        restoring = true;
+        try {
+            if (Json.isObj(json)) checkJson(config, Json.parse(json).getAsJsonObject());
+            else parseText(config, json);
+            return true;
+        } catch (Throwable e) {
+            SpiderDebug.log("config-cache", "live snapshot invalid url=%s msg=%s", config.getUrl(), e.getMessage());
+            ConfigCache.clear(config.getUrl());
+            return false;
+        } finally {
+            restoring = false;
+        }
     }
 
     @Override

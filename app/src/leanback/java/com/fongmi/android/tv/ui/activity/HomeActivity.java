@@ -322,9 +322,25 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void initConfig() {
         SpiderDebug.log("startup", "config load start cost=%sms", System.currentTimeMillis() - App.time());
-        VodConfig.get().init().load(getCallback());
-        LiveConfig.get().init().load();
-        WallConfig.get().init();
+        try {
+            VodConfig.get().init().load(getCallback());
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "vod config init failed: %s", e);
+            e.printStackTrace();
+            showContent();
+        }
+        try {
+            LiveConfig.get().init().load();
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "live config init failed: %s", e);
+            e.printStackTrace();
+        }
+        try {
+            WallConfig.get().init();
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "wall config init failed: %s", e);
+            e.printStackTrace();
+        }
     }
 
     private Callback getCallback() {
@@ -346,25 +362,39 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void showContent() {
         SpiderDebug.log("startup", "home showContent start cost=%sms", System.currentTimeMillis() - App.time());
-        mBinding.progressLayout.showContent();
-        checkAction(getIntent());
-        setTitle();
-        setLogo();
-        setFunc();
-        getHistory();
-        getVideo();
-        setFocus();
-        App.post(this::prewarmWebView, 1500);
+        try {
+            mBinding.progressLayout.showContent();
+            checkAction(getIntent());
+            setTitle();
+            setLogo();
+            setFunc();
+            getHistory();
+            getVideo();
+            setFocus();
+            App.post(this::prewarmWebView, 1500);
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "home showContent degraded cost=%sms error=%s", System.currentTimeMillis() - App.time(), e);
+            e.printStackTrace();
+            try {
+                mBinding.progressLayout.showContent();
+            } catch (Throwable ignored) {
+            }
+        }
         SpiderDebug.log("startup", "home showContent end cost=%sms", System.currentTimeMillis() - App.time());
     }
 
     private void prewarmWebView() {
-        if (isFinishing() || mWeb != null) return;
-        boolean hasWebHome = VodConfig.get().getSites().stream().anyMatch(Site::hasHomePage);
-        if (!hasWebHome) return;
-        SpiderDebug.log("startup", "webview prewarm start cost=%sms", System.currentTimeMillis() - App.time());
-        ensureWebView();
-        SpiderDebug.log("startup", "webview prewarm end cost=%sms", System.currentTimeMillis() - App.time());
+        try {
+            if (isFinishing() || mWeb != null) return;
+            boolean hasWebHome = VodConfig.get().getSites().stream().anyMatch(Site::hasHomePage);
+            if (!hasWebHome) return;
+            SpiderDebug.log("startup", "webview prewarm start cost=%sms", System.currentTimeMillis() - App.time());
+            ensureWebView();
+            SpiderDebug.log("startup", "webview prewarm end cost=%sms", System.currentTimeMillis() - App.time());
+        } catch (Throwable e) {
+            SpiderDebug.log("startup", "webview prewarm skipped: %s", e);
+            e.printStackTrace();
+        }
     }
 
     private void loadLive(String url) {

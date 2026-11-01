@@ -15,11 +15,14 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.CustomCspSetting;
+import com.fongmi.android.tv.utils.ConfigCache;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.github.catvod.bean.Doh;
 import com.github.catvod.bean.Header;
 import com.github.catvod.bean.Proxy;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.google.gson.JsonObject;
 
@@ -43,6 +46,7 @@ public class VodConfig extends BaseConfig {
     private List<String> ads;
     private List<String> flags;
     private List<Parse> parses;
+    private boolean restoring;
 
     public static VodConfig get() {
         return Loader.INSTANCE;
@@ -115,8 +119,40 @@ public class VodConfig extends BaseConfig {
 
     @Override
     protected void load(Config config) throws Throwable {
-        String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
-        checkJson(config, Json.parse(json).getAsJsonObject());
+        try {
+            String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
+            JsonObject object = Json.parse(json).getAsJsonObject();
+            checkJson(config, object);
+            ConfigCache.save(config.getUrl(), object.toString());
+        } catch (Throwable e) {
+            if (restoreFromCache(config, e)) return;
+            throw e;
+        }
+    }
+
+    /**
+     * 源地址失效时的兜底：改用上一次成功拉取的配置快照，避免初始化阶段直接抛异常。
+     */
+    private boolean restoreFromCache(Config config, Throwable cause) {
+        if (restoring || config == null) return false;
+        String json = ConfigCache.load(config.getUrl());
+        if (TextUtils.isEmpty(json)) {
+            SpiderDebug.log("config-cache", "no snapshot url=%s cause=%s", config.getUrl(), cause == null ? "unknown" : cause.getMessage());
+            return false;
+        }
+        SpiderDebug.log("config-cache", "fallback snapshot url=%s cause=%s", config.getUrl(), cause == null ? "unknown" : cause.getMessage());
+        restoring = true;
+        try {
+            checkJson(config, Json.parse(json).getAsJsonObject());
+            App.post(() -> Notify.show("订阅源无法访问，已载入本地缓存配置"));
+            return true;
+        } catch (Throwable e) {
+            SpiderDebug.log("config-cache", "snapshot invalid url=%s msg=%s", config.getUrl(), e.getMessage());
+            ConfigCache.clear(config.getUrl());
+            return false;
+        } finally {
+            restoring = false;
+        }
     }
 
     @Override

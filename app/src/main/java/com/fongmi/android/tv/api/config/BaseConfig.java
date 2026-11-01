@@ -101,15 +101,15 @@ abstract class BaseConfig {
             OkHttp.cancel(getTag());
             load(config);
             if (taskId.get() != id) return;
-            if (config.equals(this.config)) config.update();
+            if (config != null && config.equals(this.config)) config.update();
             onLoadSuccess();
-            App.post(() -> Notify.show(config.getNotice()));
+            if (config != null) App.post(() -> Notify.show(config.getNotice()));
             App.post(callback::success);
         } catch (Throwable e) {
             e.printStackTrace();
             if (isCanceled(e)) return;
             if (taskId.get() != id) return;
-            if (TextUtils.isEmpty(config.getUrl())) App.post(() -> callback.error(""));
+            if (config == null || TextUtils.isEmpty(config.getUrl())) App.post(() -> callback.error(""));
             else App.post(() -> callback.error(Notify.getError(R.string.error_config_get, e)));
         } finally {
             if (taskId.get() == id) postEvent();

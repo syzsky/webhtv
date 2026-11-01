@@ -49,6 +49,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Vendor upstream third_party/maven
+        run: |
+          set -euo pipefail
+          if [ -d third_party/maven ]; then
+            echo "third_party/maven already present in repo"
+          else
+            echo "third_party/maven missing, fetching from upstream webhtv/webhtv"
+            rm -rf /tmp/up && mkdir -p /tmp/up
+            git clone --filter=blob:none --sparse --depth 1 https://github.com/webhtv/webhtv.git /tmp/up
+            cd /tmp/up
+            git sparse-checkout set third_party/maven
+            cd "$GITHUB_WORKSPACE"
+            mkdir -p third_party
+            cp -a /tmp/up/third_party/maven third_party/
+          fi
+          echo "--- local maven repo contents ---"
+          ls third_party/maven
+          find third_party/maven -name '*.pom' | wc -l
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:

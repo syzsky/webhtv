@@ -115,7 +115,7 @@ public final class CrashGuard {
 
     private static File publicFile() {
         try {
-            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOAD);
+            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
             return dir == null ? null : new File(dir, FILE_NAME);
         } catch (Throwable e) {
             return null;

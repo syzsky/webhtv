@@ -24,6 +24,8 @@ import com.github.catvod.bean.Header;
 import com.github.catvod.bean.Proxy;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
@@ -190,6 +192,7 @@ public class VodConfig extends BaseConfig {
     }
 
     private void parseConfig(Config config, JsonObject object) {
+        sanitize(object);
         CustomCspSetting.inject(object);
         initList(object);
         initLive(config, object);
@@ -200,6 +203,62 @@ public class VodConfig extends BaseConfig {
         config.setLogo(Json.safeString(object, "logo"));
         config.setNotice(Json.safeString(object, "notice"));
         config.setDanmaku(Json.safeString(object, "danmaku"));
+    }
+
+    /**
+     * 配置净化：剔除会导致客户端不可用/崩溃的死 DoH 与裸 IP 解析接口。
+     */
+    private void sanitize(JsonObject object) {
+        JsonArray doh = filterDoh(object.get("doh"));
+        if (doh == null || doh.size() == 0) object.remove("doh");
+        else object.add("doh", doh);
+        JsonArray parses = filterParse(object.get("parses"));
+        if (parses == null || parses.size() == 0) object.remove("parses");
+        else object.add("parses", parses);
+    }
+
+    private JsonArray filterDoh(JsonElement element) {
+        if (element == null || !element.isJsonArray()) return null;
+        JsonArray out = new JsonArray();
+        for (JsonElement item : element.getAsJsonArray()) {
+            if (item == null || !item.isJsonObject()) continue;
+            String url = str(item.getAsJsonObject().get("url")).toLowerCase();
+            if (url.contains("doh.pub") || url.contains("alidns") || url.contains("dnspod") || url.contains("360.cn")) out.add(item);
+        }
+        return out;
+    }
+
+    private JsonArray filterParse(JsonElement element) {
+        if (element == null || !element.isJsonArray()) return null;
+        JsonArray out = new JsonArray();
+        for (JsonElement item : element.getAsJsonArray()) {
+            if (item == null || !item.isJsonObject()) continue;
+            JsonObject obj = item.getAsJsonObject();
+            String name = str(obj.get("name"));
+            String url = str(obj.get("url"));
+            if (name.isEmpty() || !url.startsWith("http")) continue;
+            if (looksLikeRawIp(url)) continue;
+            out.add(item);
+        }
+        return out;
+    }
+
+    private boolean looksLikeRawIp(String url) {
+        try {
+            String host = UrlUtil.host(url);
+            if (host.isEmpty()) return true;
+            return host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
+        } catch (Throwable e) {
+            return true;
+        }
+    }
+
+    private String str(JsonElement element) {
+        try {
+            return element == null || !element.isJsonPrimitive() ? "" : element.getAsString();
+        } catch (Throwable e) {
+            return "";
+        }
     }
 
     private void initList(JsonObject object) {

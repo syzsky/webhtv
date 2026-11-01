@@ -10,6 +10,7 @@ import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.crawler.SpiderNull;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
+import com.github.catvod.utils.Prefers;
 import com.github.catvod.utils.Util;
 
 import org.json.JSONObject;
@@ -56,6 +57,52 @@ public class JarLoader {
     public void setRecent(String recent) {
         this.recent = recent;
         SpiderDebug.log("jar-loader", "recent=%s", recent);
+    }
+
+    private static final String PREF_LOADING = "jar_loading_key";
+    private static final String PREF_BLOCKED = "jar_blocked_";
+
+    /**
+     * 上一次启动时正在加载这个 jar 的进程直接死了（native abort 之类），
+     * 说明这个 jar 在本机加载必崩，直接拉黑，避免无限闪退。
+     */
+    public static void recoverFromCrash() {
+        try {
+            String stuck = Prefers.getString(PREF_LOADING);
+            if (stuck == null || stuck.isEmpty()) return;
+            Prefers.getPrefers().edit().putBoolean(PREF_BLOCKED + stuck, true).remove(PREF_LOADING).commit();
+            SpiderDebug.log("jar-loader", "blocked after crash key=%s", stuck);
+        } catch (Throwable e) {
+            SpiderDebug.log("jar-loader", "recover failed %s", e);
+        }
+    }
+
+    public static boolean isBlocked(String key) {
+        if (key == null || key.isEmpty()) return false;
+        try {
+            return Prefers.getBoolean(PREF_BLOCKED + key);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    public static boolean isBlockedJar(String jar) {
+        if (jar == null || jar.isEmpty()) return false;
+        return isBlocked(Util.md5(jar));
+    }
+
+    private static void markLoading(String key) {
+        try {
+            Prefers.getPrefers().edit().putString(PREF_LOADING, key).commit();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void clearLoading(String key) {
+        try {
+            Prefers.getPrefers().edit().remove(PREF_LOADING).commit();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void load(String key, File file) {
@@ -160,6 +207,10 @@ public class JarLoader {
 
     public void parseJar(String key, String jar) {
         if (loaders.containsKey(key)) return;
+        if (isBlocked(key)) {
+            SpiderDebug.log("jar-loader", "skip blocked key=%s", key);
+            return;
+        }
         if (jar.startsWith("assets")) jar = UrlUtil.convert(jar);
         Object lock = locks.computeIfAbsent(key, k -> new Object());
         synchronized (lock) {
@@ -169,12 +220,17 @@ public class JarLoader {
             if (md5.startsWith("http")) md5 = OkHttp.string(md5).trim();
             jar = texts[0];
             SpiderDebug.log("jar-loader", "parse start key=%s source=%s md5=%s", key, source(jar), !md5.isEmpty());
-            if (!md5.isEmpty() && Util.equals(jar, md5)) {
-                load(key, Path.jar(jar));
-            } else if (jar.startsWith("http")) {
-                load(key, Download.create(jar, Path.jar(jar)).get());
-            } else if (jar.startsWith("file")) {
-                load(key, Path.local(jar));
+            markLoading(key);
+            try {
+                if (!md5.isEmpty() && Util.equals(jar, md5)) {
+                    load(key, Path.jar(jar));
+                } else if (jar.startsWith("http")) {
+                    load(key, Download.create(jar, Path.jar(jar)).get());
+                } else if (jar.startsWith("file")) {
+                    load(key, Path.local(jar));
+                }
+            } finally {
+                clearLoading(key);
             }
         }
     }

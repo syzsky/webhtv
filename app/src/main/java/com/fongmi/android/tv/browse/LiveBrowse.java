@@ -64,13 +64,13 @@ class LiveBrowse {
     }
 
     @Nullable
-    static MediaItem resolve(@NonNull String mediaId) throws Exception {
+    static MediaItem resolve(@NonNull String mediaId) {
         LiveEntry entry = livePosMap.get(mediaId);
         return resolveChannel(entry != null ? entry.channel() : null, mediaId);
     }
 
     @Nullable
-    static MediaItem navigate(@NonNull String mediaId, int delta) throws Exception {
+    static MediaItem navigate(@NonNull String mediaId, int delta) {
         if (mediaId.startsWith(LIVE_CH)) return navigateChannel(mediaId, delta);
         String liveId = ensureLoaded();
         if (liveId != null) return navigateChannel(liveId, delta);
@@ -78,7 +78,7 @@ class LiveBrowse {
     }
 
     @Nullable
-    private static MediaItem navigateChannel(@NonNull String mediaId, int delta) throws Exception {
+    private static MediaItem navigateChannel(@NonNull String mediaId, int delta) {
         LiveEntry current = livePosMap.get(mediaId);
         if (current == null) return null;
         Integer count = liveCountMap.get(current.groupName);
@@ -105,12 +105,18 @@ class LiveBrowse {
     }
 
     @Nullable
-    private static MediaItem resolveChannel(@Nullable Channel channel, @NonNull String mediaId) throws Exception {
-        if (channel == null || TextUtils.isEmpty(channel.getCurrent())) return null;
-        Result result = LiveApi.getUrl(channel);
-        if (TextUtils.isEmpty(result.getRealUrl())) return null;
-        BrowseTree.putBrowseResult(mediaId, result);
-        return BrowseTree.stream(mediaId, result.getRealUrl(), channel.getShow(), null, channel.getLogo());
+    private static MediaItem resolveChannel(@Nullable Channel channel, @NonNull String mediaId) {
+        // 源地址失效（LiveApi.getUrl / Source.fetch 抛异常）时兜底：返回 null，
+        // 由上层显示“无可用源”，绝不把异常抛到 UI 线程导致闪退。
+        try {
+            if (channel == null || TextUtils.isEmpty(channel.getCurrent())) return null;
+            Result result = LiveApi.getUrl(channel);
+            if (TextUtils.isEmpty(result.getRealUrl())) return null;
+            BrowseTree.putBrowseResult(mediaId, result);
+            return BrowseTree.stream(mediaId, result.getRealUrl(), channel.getShow(), null, channel.getLogo());
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private static Live liveHome() {

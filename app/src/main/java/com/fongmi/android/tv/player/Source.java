@@ -99,8 +99,9 @@ public class Source {
         try {
             fetched = extractor == null ? url : extractor.fetch(result);
         } catch (Exception e) {
-            if (!(extractor instanceof Youtube) || originalParse != 1) throw e;
-            result.setParse(1);
+            // 源地址失效（网络错误 / HTTP 4xx / 空解析）时绝不向上抛导致 UI 线程崩溃：
+            // 回落到原始 URL 让播放器直连，若仍不可播由播放器给出“无法播放”提示而非闪退。
+            SpiderDebug.log("source", "extractor fetch failed, falling back to raw url: %s", e.getMessage());
             return url;
         }
         if (extractor instanceof Youtube && fetched.isEmpty() && originalParse == 1) {

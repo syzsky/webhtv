@@ -252,6 +252,10 @@ public class JarLoader {
         return spiders.computeIfAbsent(spKey, k -> {
             long start = System.currentTimeMillis();
             try {
+                if (!hasMemoryHeadroom()) {
+                    SpiderDebug.log("jar-loader", "spider init skip low-memory site=%s api=%s jar=%s", key, api, jaKey);
+                    return new SpiderNull();
+                }
                 SpiderDebug.log("jar-loader", "spider init start site=%s api=%s jar=%s ext=%s", key, api, jaKey, ext == null ? 0 : ext.length());
                 parseJar(jaKey, jar);
                 DexClassLoader loader = loaders.get(jaKey);
@@ -282,6 +286,17 @@ public class JarLoader {
     private String error(Throwable e) {
         Throwable cause = e.getCause() == null ? e : e.getCause();
         return cause.getClass().getSimpleName() + ":" + cause.getMessage();
+    }
+
+    /** Reserve a safety margin of free Java heap before loading/executing a jar spider, to avoid native OOM crashes. */
+    private boolean hasMemoryHeadroom() {
+        Runtime runtime = Runtime.getRuntime();
+        long max = runtime.maxMemory();
+        long used = runtime.totalMemory() - runtime.freeMemory();
+        long free = max - used;
+        // Require at least 96 MB of headroom, or 20% of max, whichever is larger.
+        long threshold = Math.max(96L * 1024 * 1024, max / 5);
+        return free >= threshold;
     }
 
     private DexClassLoader requireRecentLoader() {

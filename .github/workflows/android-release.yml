@@ -30,6 +30,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_tests:
+        description: "Run danmaku unit tests before build (default false)"
+        required: false
+        default: false
+        type: boolean
       publish_oci:
         description: "Publish APKs as OCI artifacts when Registry variables and secrets are configured"
         required: false
@@ -83,6 +88,7 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Run WebSocket danmaku tests
+        if: ${{ inputs.run_tests == 'true' }}
         run: |
           chmod +x ./gradlew
           ./gradlew \

@@ -25,13 +25,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import dalvik.system.DexClassLoader;
 
 public class Spider extends com.github.catvod.crawler.Spider {
+
+    private static final long CALL_TIMEOUT_MS = 15000L;
 
     private final ExecutorService executor;
     private final DexClassLoader dex;
@@ -53,7 +58,18 @@ public class Spider extends com.github.catvod.crawler.Spider {
     }
 
     private Object call(String func, Object... args) throws Exception {
-        return submit(() -> Async.run(jsObject, func, args)).get().get();
+        Future<CompletableFuture<Object>> task = submit(() -> Async.run(jsObject, func, args));
+        try {
+            CompletableFuture<Object> promise = task.get(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return promise.get(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            task.cancel(true);
+            throw new Exception("JS spider timed out: " + func);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception) throw (Exception) cause;
+            throw e;
+        }
     }
 
     @Override

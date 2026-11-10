@@ -115,6 +115,10 @@ public class JarLoader {
             SpiderDebug.log("jar-loader", "load skip missing key=%s file=%s", key, file);
             return;
         }
+        if (!hasMemoryHeadroom()) {
+            SpiderDebug.log("jar-loader", "load skip low-memory key=%s file=%s size=%s", key, file.getAbsolutePath(), file.length());
+            return;
+        }
         if (!file.setReadOnly()) {
             SpiderDebug.log("jar-loader", "load skip readonly failed key=%s file=%s size=%s", key, file.getAbsolutePath(), file.length());
             return;
@@ -294,8 +298,8 @@ public class JarLoader {
         long max = runtime.maxMemory();
         long used = runtime.totalMemory() - runtime.freeMemory();
         long free = max - used;
-        // Require at least 96 MB of headroom, or 20% of max, whichever is larger.
-        long threshold = Math.max(96L * 1024 * 1024, max / 5);
+        // Require at least 160 MB of headroom, or 30% of max, whichever is larger.
+        long threshold = Math.max(160L * 1024 * 1024, max / 3);
         return free >= threshold;
     }
 

@@ -1,0 +1,46 @@
+name: actions-cleanup
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge stale artifacts (>7 days)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            let page = 1, deleted = 0;
+            const cutoff = Date.now() - 7*24*60*60*1000;
+            while (true) {
+              const { data } = await github.rest.actions.listArtifactsForRepo({ ...repo, per_page: 100, page });
+              for (const a of data.artifacts) {
+                if (new Date(a.created_at).getTime() < cutoff) {
+                  await github.rest.actions.deleteArtifact({ ...repo, artifact_id: a.id });
+                  deleted++;
+                }
+              }
+              if (data.artifacts.length < 100) break;
+              page++;
+            }
+            core.setOutput('artifacts_deleted', deleted);
+
+      - name: Purge stale caches (>7 days)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            const { data } = await github.rest.actions.getActionsCacheList({ ...repo, per_page: 100 });
+            const cutoff = Date.now() - 7*24*60*60*1000;
+            for (const c of data.actions_caches) {
+              if (new Date(c.created_at).getTime() < cutoff) {
+                await github.rest.actions.deleteActionsCacheById({ ...repo, cache_id: c.id });
+              }
+            }

@@ -28,6 +28,7 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Path;
+import com.github.catvod.utils.Prefers;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -54,6 +55,29 @@ public abstract class AppDatabase extends RoomDatabase {
     public static void backup(com.fongmi.android.tv.impl.Callback callback) {
         backup(callback, null);
     }
+
+    /**
+     * 每周自动备份：距上次自动备份超过 7 天则备份一次，并清理旧的备份文件（保留最近 4 份）。
+     * 在后台线程执行，不阻塞启动。
+     */
+    public static void backupIfDue() {
+        Task.execute(() -> {
+            try {
+                long last = Prefers.getLong("auto_backup_at", 0);
+                long now = System.currentTimeMillis();
+                if (now - last < WEEK_MS) return;
+                File file = new File(Path.tv(), AppBackup.fileName());
+                AppBackup.create(file, null);
+                Prefers.put("auto_backup_at", now);
+                SpiderDebug.log("backup", "weekly auto backup done file=%s size=%d", file.getName(), file.length());
+                cleanOld(4);
+            } catch (Throwable e) {
+                SpiderDebug.log("backup", "weekly auto backup failed error=%s", e.getMessage());
+            }
+        });
+    }
+
+    private static final long WEEK_MS = 7L * 24 * 60 * 60 * 1000;
 
     public static void backup(com.fongmi.android.tv.impl.Callback callback, AppBackup.Progress progress) {
         Task.execute(() -> {
@@ -92,12 +116,16 @@ public abstract class AppDatabase extends RoomDatabase {
     }
 
     private static void cleanOld() {
+        cleanOld(7);
+    }
+
+    private static void cleanOld(int keep) {
         List<File> items = new ArrayList<>();
         File[] files = Path.tv().listFiles();
         if (files == null) files = new File[0];
         for (File file : files) if (AppBackup.isBackup(file)) items.add(file);
         if (!items.isEmpty()) items.sort((f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
-        if (items.size() > 7) for (int i = 7; i < items.size(); i++) Path.clear(items.get(i));
+        if (items.size() > keep) for (int i = keep; i < items.size(); i++) Path.clear(items.get(i));
     }
 
     private static AppDatabase create(Context context) {
